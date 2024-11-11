@@ -6,59 +6,61 @@ import tempfile as tf
 import os
 import streamlit as st
 
-device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu" 
+# 디바이스 설정
+device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
+# 자동 음성 인식 파이프라인 초기화
 transcriber = pipeline(
     "automatic-speech-recognition", model="openai/whisper-small", device=device
 )
-
 transcriber.model.generation_config.language = None
 transcriber.model.generation_config.task = None
 
 def create_temp_dir():
-    # Create a temporary directory
     set_temp_dir = tf.TemporaryDirectory()
     temp_dir = set_temp_dir.name + "/"
-    # 디렉터리 접근 권한 설정
     os.chmod(temp_dir, 0o700)
     return temp_dir
 
+# 음성을 실시간으로 전사하는 함수
 def transcribe(chunk_length_s=10.0, stream_chunk_s=1.0):
     sampling_rate = transcriber.feature_extractor.sampling_rate
 
+    # 마이크 스트림 시작
     mic = ffmpeg_microphone_live(
         sampling_rate=sampling_rate,
         chunk_length_s=chunk_length_s,
         stream_chunk_s=stream_chunk_s,
     )
 
-    print("Start speaking...")
     st.write("Start speaking...")
 
-    item = None  # item을 기본적으로 None으로 초기화
+    # 음성이 입력될 때까지 대기 상태 유지
     for item in transcriber(mic, generate_kwargs={"max_new_tokens": 128}):
-        sys.stdout.write("\033[K")
-        try:
+        # item에 text 필드가 있는지 확인
+        if "text" in item and item["text"].strip():
+            sys.stdout.write("\033[K")  # 콘솔에서 이전 텍스트 삭제
             print(item["text"], end="\r")
-            if not item.get("partial", [True])[0]:  # 안전한 partial 필드 접근
-                break
-        except KeyError:
-            print("No 'text' field in item. Skipping...")
-            continue
+            return item["text"]  # 텍스트 반환
 
-    # item이 None인지 확인하여 기본값 반환
-    return item.get("text", "No text available") if item else "No text captured"
+        # 대기 상태 표시
+        st.write("Waiting for audio input...")
 
+    return None  # 음성이 없을 경우 None 반환
+
+# Streamlit 인터페이스 설정
 st.set_page_config(
     page_title="Realtime Transcription",
     page_icon="https://static.thenounproject.com/png/48407-200.png"
 )
-# Featured image
+
 st.image(
     "https://static.thenounproject.com/png/48407-200.png",
     width=150
 )
-def main():# Main title and description
+
+def main():
+    # 타이틀 및 설명 표시
     st.title("Realtime Transcription")
     st.markdown("Just Press 'Start' and start speaking.")
 
@@ -66,34 +68,27 @@ def main():# Main title and description
     stop_button = st.button("Stop")
 
     transcript_content = ""
-    temp_dir = ""
     
+    # Start 버튼이 눌렸을 때 실시간 전사 시작
     if start_button:
-        # temp_dir = create_temp_dir()
-        # transcript_path = temp_dir + "transcript.txt"
-        # if not os.path.exists(temp_dir):
-        #     os.makedirs(temp_dir)
-        # with open(transcript_path, "a+") as f:
         while True:
             text = transcribe()
-            st.write(text)
-            # f.write(text + "\n")
-            transcript_content += text + "\n"
+            if text:  # 텍스트가 반환된 경우에만 출력
+                st.write(text)
+                transcript_content += text + "\n"
             if stop_button:
                 break
-                
+
+    # Stop 버튼이 눌렸을 때 텍스트 저장 및 다운로드
     if stop_button:
         st.write("Stopped.")
-        st.text_area(transcript_content)
-        st.spinner("Downloading transcript...")
+        st.text_area("Transcript", transcript_content)
         st.download_button(
-            label="Donwload Transcript",
+            label="Download Transcript",
             data=transcript_content,
             file_name="transcript.txt",
             mime="text/plain",
         )
-        # else:
-        #     st.error("No transcript found.")
 
 if __name__ == "__main__":
     main()
