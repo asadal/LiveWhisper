@@ -33,10 +33,16 @@ def transcribe(chunk_length_s=10.0, stream_chunk_s=1.0):
         stream_chunk_s=stream_chunk_s,
     )
 
-    st.write("Start speaking...")
+    # 'Start speaking...' 메시지를 한 번만 출력
+    first_run = True
 
     # 음성이 입력될 때까지 대기 상태 유지
     for item in transcriber(mic, generate_kwargs={"max_new_tokens": 128}):
+        # 최초 실행 시 메시지 출력
+        if first_run:
+            st.write("Start speaking...")
+            first_run = False  # 이후로는 이 메시지가 반복되지 않음
+
         # item에 text 필드가 있는지 확인하여 음성 입력이 없으면 루프 계속
         if "text" in item and item["text"].strip():
             sys.stdout.write("\033[K")  # 콘솔에서 이전 텍스트 삭제
@@ -44,7 +50,7 @@ def transcribe(chunk_length_s=10.0, stream_chunk_s=1.0):
             return item["text"]  # 텍스트 반환
 
     # 음성이 없는 경우 None 반환하지 않고 대기 유지
-    return "Waiting for audio input..."
+    return None
 
 # Streamlit 인터페이스 설정
 st.set_page_config(
@@ -71,7 +77,7 @@ def main():
     if start_button:
         while True:
             text = transcribe()
-            if text and text != "Waiting for audio input...":  # 텍스트가 반환된 경우에만 출력
+            if text:  # 텍스트가 반환된 경우에만 출력
                 st.write(text)
                 transcript_content += text + "\n"
             if stop_button:
