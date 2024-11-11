@@ -36,11 +36,17 @@ def transcribe(chunk_length_s=10.0, stream_chunk_s=1.0):
     st.write("Start speaking...")
     for item in transcriber(mic, generate_kwargs={"max_new_tokens": 128}):
         sys.stdout.write("\033[K")
-        print(item["text"], end="\r")
-        if not item["partial"][0]:
-            break
+        # 'text' 필드가 있는지 확인 후 출력
+        try:
+            print(item["text"], end="\r")
+            if not item.get("partial", [True])[0]:
+                break
+        except KeyError:
+            print("No 'text' field in item. Skipping...")
+            continue
 
-    return item["text"]
+    # 오류가 발생하지 않았다면 정상적으로 item["text"] 반환
+    return item.get("text", "No text available")
 
 st.set_page_config(
     page_title="Realtime Transcription",
