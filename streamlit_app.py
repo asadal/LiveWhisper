@@ -34,19 +34,20 @@ def transcribe(chunk_length_s=10.0, stream_chunk_s=1.0):
 
     print("Start speaking...")
     st.write("Start speaking...")
+
+    item = None  # item을 기본적으로 None으로 초기화
     for item in transcriber(mic, generate_kwargs={"max_new_tokens": 128}):
         sys.stdout.write("\033[K")
-        # 'text' 필드가 있는지 확인 후 출력
         try:
             print(item["text"], end="\r")
-            if not item.get("partial", [True])[0]:
+            if not item.get("partial", [True])[0]:  # 안전한 partial 필드 접근
                 break
         except KeyError:
             print("No 'text' field in item. Skipping...")
             continue
 
-    # 오류가 발생하지 않았다면 정상적으로 item["text"] 반환
-    return item.get("text", "No text available")
+    # item이 None인지 확인하여 기본값 반환
+    return item.get("text", "No text available") if item else "No text captured"
 
 st.set_page_config(
     page_title="Realtime Transcription",
